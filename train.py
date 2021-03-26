@@ -35,6 +35,9 @@ def seed_torch(seed=1024):
 
 # seed_torch()
 
+
+#  params for select model, scale,loss,batch and so on .Just for Training .
+#  datasets params in data\scripts\config.py
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
