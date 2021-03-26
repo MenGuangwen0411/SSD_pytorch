@@ -24,7 +24,7 @@ import cv2
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 # from data import VOC_CLASSES as labels
-from data import BDD_CLASSES as labels
+from data.bdd100k import BDD_CLASSES as labels
 from ssd import build_ssd
 
 # d:\datasets\BDD100K\bdd100k\images\100k\train\0000f77c-6257be58.jpg
@@ -35,10 +35,10 @@ from ssd import build_ssd
 # d:\datasets\BDD100K\bdd100k\images\100k\train\0001542f-ec815219.jpg
 # d:\datasets\BDD100K\bdd100k\images\100k\train\0004974f-05e1c285.jpg
 image_path = r'd:\datasets\BDD100K\bdd100k\images\100k\train\0000f77c-6257be58.jpg'
-weight_path = 'weights/ssd512_VOC_580.pth'
+weight_path = 'weights/SSD512_BDD100K_0000001000.pth'
 model_input = 512
 
-net = build_ssd('test', model_input, 11)  # initialize SSD
+net = build_ssd('test', 'VGG16',model_input, 11)  # initialize SSD
 net.load_weights(weight_path)
 image = cv2.imread(image_path, cv2.IMREAD_COLOR)  # uncomment if dataset not downloaded
 rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)

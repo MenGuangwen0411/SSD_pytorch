@@ -3,7 +3,6 @@ from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
 from ssd import build_ssd, build_ssd_efficientnet
 import os
-import sys
 import time
 import torch
 from torch.autograd import Variable
@@ -14,7 +13,6 @@ import torch.nn.init as init
 import torch.utils.data as data
 import numpy as np
 import argparse
-import pickle
 import math
 import random
 
@@ -39,25 +37,22 @@ def seed_torch(seed=1024):
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
-parser.add_argument('--input', default=512, type=int, choices=[300, 512],
-                    help='ssd input size, currently support ssd300 and ssd512')
 parser.add_argument('--dataset', default='BDD100K', choices=['VOC', 'COCO', 'BDD100K'],
                     type=str)
-parser.add_argument('--num_class', default=11, type=int, help='number of class in ur dataset')
-parser.add_argument('--dataset_root', default=r"d:\datasets\VOC0712",
-                    help='Dataset root directory path')
-parser.add_argument('--basenet', default='vgg16_reducedfc.pth', type=str,
-                    choices=['vgg16_reducedfc.pth', 'efficientnet_b4_truncated.pth'],
-                    help='Pretrained base model')
-parser.add_argument('--num_epoch', default=300, type=int, help='number of epochs to train')
-parser.add_argument('--batch_size', default=20, type=int,
+parser.add_argument('--modelname', default='SSD512', choices=['SSD300', 'SSD512', 'RBF300'],
+                    type=str)
+parser.add_argument('--backbone', default='VGG16', type=str,
+                    choices=['VGG16', 'ResNet50', 'EfficientNet'])
+parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from')
 parser.add_argument('--start_epoch', default=0, type=int,
                     help='Resume training at this epoch')
+parser.add_argument('--total_epoch', default=300, type=int,
+                    help='number of epochs to train')
 parser.add_argument('--num_workers', default=6, type=int,
-                    help='Number of workers used in dataloading')
+                    help='Number of workers used in loading data')
 parser.add_argument('--cuda', default=True, type=str2bool,
                     help='Use CUDA to train model')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
@@ -78,8 +73,6 @@ if torch.cuda.is_available():
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     if not args.cuda:
-        print("WARNING: It looks like you have a CUDA device, but aren't " +
-              "using CUDA.\nRun with --cuda for optimal training speed.")
         torch.set_default_tensor_type('torch.FloatTensor')
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
@@ -89,6 +82,10 @@ if not os.path.exists(args.save_folder):
 
 
 def train():
+    model_config = None
+    datasets_config = None
+    backbone = None
+
     if args.dataset == 'COCO':
         if args.dataset_root == VOC_ROOT:
             if not os.path.exists(COCO_ROOT):
@@ -107,22 +104,19 @@ def train():
         dataset = VOCDetection(root=args.dataset_root,
                                transform=SSDAugmentation(args.input,
                                                          MEANS))
-    if args.dataset == 'BDD100K':
-        cfg = bdd
-        root = r'd:\datasets\BDD100K'
+    elif args.dataset == 'BDD100K':
+        from data.config import BDD100K as datasets_config
+        from data.config import SSD512 as model_config
+        from data.bdd100k import BDD100KDetection
+        root = datasets_config['root']
+        backbone = args.backbone
         dataset = BDD100KDetection(root, image_sets='train',
-                                   transform=SSDAugmentation(cfg['min_dim'],
+                                   transform=SSDAugmentation(model_config['net_size'],
                                                              MEANS))
-
-    if args.visdom:
-        import visdom
-        viz = visdom.Visdom()
-    if args.basenet == 'vgg16_reducedfc.pth':
-        ssd_net = build_ssd('train', args.input, args.num_class)
-    elif args.basenet == 'efficientnet_b4_truncated.pth':
-        ssd_net = build_ssd_efficientnet('train', args.input, args.num_class)
-    # freeze base
-
+    else:
+        print(args.dataset, 'Not define,Return')
+        return
+    ssd_net = build_ssd('train', 'VGG16', model_config['net_size'], datasets_config['num_classes'], )
     net = ssd_net
     # for block in net.base.parameters():
     #     block.requires_grad = False
@@ -130,139 +124,79 @@ def train():
         net = torch.nn.DataParallel(ssd_net)
         cudnn.benchmark = True
 
-    if args.resume:
-        print('Resuming training, loading {}...'.format(args.resume))
-        ssd_net.load_weights(args.resume)
-    else:
-        if args.basenet == 'vgg16_reducedfc.pth':
-            vgg_weights = torch.load(args.save_folder + args.basenet)
-            print('Loading base network weights from %s\n' % (args.save_folder + args.basenet))
-            ssd_net.base.load_state_dict(vgg_weights)
-        elif args.basenet == 'efficientnet_b4_truncated.pth':
-            efficientnet_weights = torch.load(args.save_folder + args.basenet)
-            print('Loading base network weights from %s\n' % (args.save_folder + args.basenet))
-            print('ssd_net.base:', ssd_net.base)
-            ssd_net.base.load_state_dict(efficientnet_weights)
-
     if args.cuda:
         net = net.cuda()
 
-    if not args.resume:
-        print('Initializing weights...')
+    if args.start_epoch == 0:
+        print('Initializing weights with {}'.format('vgg16_reducedfc.pth'))
         # initialize newly added layers' weights with xavier method
-
+        vgg_weights = torch.load(r'weights/vgg16_reducedfc.pth')
+        ssd_net.base.load_state_dict(vgg_weights)
         ssd_net.extras.apply(weights_init)
         ssd_net.loc.apply(weights_init)
         ssd_net.conf.apply(weights_init)
+    else:
+        os.path.exists('path')
+        ssd_net.load_weights(args.resume)
 
     optimizer = optim.AdamW(net.parameters(), lr=args.lr)
-    criterion = MultiBoxLoss(args.num_class, 0.5, True, 0, True, 3, 0.5,
+    criterion = MultiBoxLoss(datasets_config['num_classes'], 0.5, True, 0, True, 3, 0.5,
                              False, args.cuda)
 
     net.train()
-    # loss counters
-    loc_loss = 0
-    conf_loss = 0
     iteration = 1
-    loss_total = []
-    loss_loc = []
-    loss_cls = []
-    print('Loading the dataset...')
 
     epoch_size = math.ceil(len(dataset) / args.batch_size)
-    print('iteration per epoch:', epoch_size)
-    print('Training SSD on:', dataset.name)
-    print('Using the specified args:')
     print(args)
     step_index = 0
-    if args.visdom:
-        vis_title = 'SSD.PyTorch on ' + dataset.name
-        vis_legend = ['Loc Loss', 'Conf Loss', 'Total Loss']
-        iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
-        epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
 
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True)
-    # create batch iterator
-    # batch_iterator = iter(data_loader)
-    for epoch in range(args.start_epoch, args.num_epoch):
-        print('\n' + '-' * 70 + 'Epoch: {}'.format(epoch) + '-' * 70 + '\n')
-        if args.visdom and epoch != 0 and (iteration % epoch_size == 0):
-            update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
-                            'append', epoch_size)
-            # reset epoch loss counters
-            loc_loss = 0
-            conf_loss = 0
-            epoch += 1
-        # if epoch in cfg['SSD{}'.format(args.input)]['lr_steps']:
-        # if epoch in cfg['lr_steps']:
-        #     step_index += 1
-        #     adjust_learning_rate(optimizer, args.gamma, step_index)
 
+    for epoch in range(args.start_epoch, args.total_epoch):
+        print('\n' + '-' * 70 + 'Epoch: {}'.format(epoch) + '-' * 70 + '\n')
         if epoch <= 5:
             warmup_learning_rate(optimizer, epoch)
         else:
-            if epoch in cfg['lr_steps']:
+            if epoch in datasets_config['lr_steps']:
                 step_index += 1
                 adjust_learning_rate(optimizer, args.gamma, step_index)
-
-            # for bound_epoch in cfg['lr_steps']:
-            #     if epoch > bound_epoch:
-            #         step_index += 1
-            #         adjust_learning_rate(optimizer, args.gamma, step_index)
-            #         continue
+        for param in optimizer.param_groups:
+            if 'lr' in param.keys():
+                cur_lr = param['lr']
 
         for images, targets in data_loader:  # load train data
-            # if iteration % 100 == 0:
-            for param in optimizer.param_groups:
-                if 'lr' in param.keys():
-                    cur_lr = param['lr']
+
             if args.cuda:
                 images = Variable(images.cuda())
                 targets = [Variable(ann.cuda()) for ann in targets]
             else:
                 images = Variable(images)
                 targets = [Variable(ann) for ann in targets]
-            # # forward
-            # print(epoch, cur_lr)
             t0 = time.time()
             out = net(images)
-            # backprop
             optimizer.zero_grad()
             loss_l, loss_c = criterion(out, targets)
             loss = loss_l + loss_c
             loss.backward()
             optimizer.step()
             t1 = time.time()
-            loc_loss += loss_l.item()
-            conf_loss += loss_c.item()
 
-            # if iteration % 10 == 0:
-            if 1:
+            if iteration % 10 == 0:
                 print('Epoch ' + repr(epoch) + '|| iter ' + repr(iteration % epoch_size) + '/' + repr(
                     epoch_size) + '|| Total iter ' + repr(
                     iteration) + ' || Total Loss: %.4f || Loc Loss: %.4f || Cls Loss: %.4f || LR: %f || timer: %.4f sec.\n' % (
                           loss.item(), loss_l.item(), loss_c.item(), cur_lr, (t1 - t0)), end=' ')
-                # loss_cls.append(loss_c.item())
-                # loss_loc.append(loss_l.item())
-                # loss_total.append(loss.item())
-                # loss_dic = {'loss': loss_total, 'loss_cls': loss_cls, 'loss_loc': loss_loc}
 
-            if args.visdom:
-                update_vis_plot(iteration, loss_l.item(), loss_c.item(),
-                                iter_plot, epoch_plot, 'append')
-
-            if iteration != 0 and iteration % 10 == 0:
+            if iteration != 0 and iteration % 1000 == 0:
                 print('Saving state, iter:', iteration)
-                torch.save(ssd_net.state_dict(), 'weights/ssd{}_VOC_'.format(args.input) +
-                           repr(iteration) + '.pth')
-                # with open('loss.pkl', 'wb') as f:
-                #     pickle.dump(loss_dic, f, pickle.HIGHEST_PROTOCOL)
+                torch.save(ssd_net.state_dict(),
+                           'weights/{}_{}_iter_{}.pth'.format(args.modelname, args.dataset, str(iteration).zfill(10)))
             iteration += 1
-    torch.save(ssd_net.state_dict(),
-               args.save_folder + '' + args.dataset + '.pth')
+        torch.save(ssd_net.state_dict(),
+                   args.save_folder + '/{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset, str(epoch).zfill(10)))
 
 
 def adjust_learning_rate(optimizer, gamma, step):
@@ -294,37 +228,6 @@ def weights_init(m):
     if isinstance(m, nn.Conv2d):
         xavier(m.weight.data)
         m.bias.data.zero_()
-
-
-def create_vis_plot(_xlabel, _ylabel, _title, _legend):
-    return viz.line(
-        X=torch.zeros((1,)).cpu(),
-        Y=torch.zeros((1, 3)).cpu(),
-        opts=dict(
-            xlabel=_xlabel,
-            ylabel=_ylabel,
-            title=_title,
-            legend=_legend
-        )
-    )
-
-
-def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
-                    epoch_size=1):
-    viz.line(
-        X=torch.ones((1, 3)).cpu() * iteration,
-        Y=torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu() / epoch_size,
-        win=window1,
-        update=update_type
-    )
-    # initialize epoch plot on first iteration
-    if iteration == 0:
-        viz.line(
-            X=torch.zeros((1, 3)).cpu(),
-            Y=torch.Tensor([loc, conf, loc + conf]).unsqueeze(0).cpu(),
-            win=window2,
-            update=True
-        )
 
 
 if __name__ == '__main__':

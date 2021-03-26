@@ -2,7 +2,7 @@
 import os.path
 
 # gets home dir cross platform
-HOME = os.path.expanduser("~")
+# HOME = os.path.expanduser("~")
 
 # for making bounding boxes pretty
 COLORS = ((255, 0, 0, 128), (0, 255, 0, 128), (0, 0, 255, 128),
@@ -87,7 +87,7 @@ SSD300 = {
 }
 SSD512 = {
     'feature_maps': [64, 32, 16, 8, 4, 2, 1],
-    'min_dim': 512,
+    'net_size': 512,
     'steps': [8, 16, 32, 64, 100, 300, 512],
     'min_sizes': [30, 60, 111, 162, 213, 264, 315],
     'max_sizes': [60, 111, 162, 213, 264, 315, 366],
@@ -116,7 +116,7 @@ VOC = {'num_classes': 21,
        'lr_steps': (100, 180, 250),
        'max_iter': 520000, }
 BDD100K = {'num_classes': 11,
-           'root': '',
+           'root': r'd:\datasets\BDD100K',
            'names': [],
            'lr_steps': (100, 180, 250),
            'max_iter': 520000, }

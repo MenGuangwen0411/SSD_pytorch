@@ -99,10 +99,10 @@ class SSD(nn.Module):
         conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
         if self.phase == "test":
             output = self.detect.forward(
-                loc.view(loc.size(0), -1, 4),                   # loc preds
+                loc.view(loc.size(0), -1, 4),  # loc preds
                 self.softmax(conf.view(conf.size(0), -1,
-                             self.num_classes)),                # conf preds
-                self.priors.type(type(x.data))                  # default boxes
+                                       self.num_classes)),  # conf preds
+                self.priors.type(type(x.data))  # default boxes
             )
         else:
             output = (
@@ -117,7 +117,7 @@ class SSD(nn.Module):
         if ext == '.pkl' or '.pth':
             print('Begin loading weights into state dict...')
             self.load_state_dict(torch.load(base_file,
-                                 map_location=lambda storage, loc: storage))
+                                            map_location=lambda storage, loc: storage))
             print('Finished!')
         else:
             print('Sorry only .pth and .pkl files supported.')
@@ -125,7 +125,7 @@ class SSD(nn.Module):
 
 # This function is derived from torchvision VGG make_layers()
 # https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
-def vgg(cfg, i = 3, batch_norm=False):
+def vgg(cfg, i=3, batch_norm=False):
     layers = []
     in_channels = i
     for v in cfg:
@@ -145,16 +145,19 @@ def vgg(cfg, i = 3, batch_norm=False):
     conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
     layers += [pool5, conv6,
                nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
-    print('VGG base:',layers)
+    print('VGG base:', layers)
     return layers
+
 
 def efficientnet_base(batch_norm=False):
     base_model = EfficientNet.from_name('efficientnet-b4')
     layer1 = [base_model._conv_stem, base_model._bn0]
-    layer2 = [base_model._blocks[0],base_model._blocks[1],base_model._blocks[2]]
-    layer3 = [base_model._blocks[3],base_model._blocks[4],base_model._blocks[5],base_model._blocks[6]]
-    layer4 = [base_model._blocks[7],base_model._blocks[8],base_model._blocks[9],base_model._blocks[10]]
-    layer5 = [base_model._blocks[11],base_model._blocks[12],base_model._blocks[13],base_model._blocks[14],base_model._blocks[15],base_model._blocks[16],base_model._blocks[17],base_model._blocks[18],base_model._blocks[19],base_model._blocks[20],base_model._blocks[21],base_model._blocks[22]]
+    layer2 = [base_model._blocks[0], base_model._blocks[1], base_model._blocks[2]]
+    layer3 = [base_model._blocks[3], base_model._blocks[4], base_model._blocks[5], base_model._blocks[6]]
+    layer4 = [base_model._blocks[7], base_model._blocks[8], base_model._blocks[9], base_model._blocks[10]]
+    layer5 = [base_model._blocks[11], base_model._blocks[12], base_model._blocks[13], base_model._blocks[14],
+              base_model._blocks[15], base_model._blocks[16], base_model._blocks[17], base_model._blocks[18],
+              base_model._blocks[19], base_model._blocks[20], base_model._blocks[21], base_model._blocks[22]]
     print('base network:', layer1 + layer2 + layer3 + layer4 + layer5)
     return layer1 + layer2 + layer3 + layer4 + layer5
 
@@ -168,18 +171,19 @@ def add_extras(cfg, i, batch_norm=False):
         if in_channels != 'S':
             if v == 'S':
                 layers += [nn.Conv2d(in_channels, cfg[k + 1],
-                           kernel_size=(1, 3)[flag], stride=2, padding=1)]
+                                     kernel_size=(1, 3)[flag], stride=2, padding=1)]
             else:
                 layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag])]
             flag = not flag
         in_channels = v
     if len(cfg) == 13:
-        print('input channels:',in_channels)
-        layers += [nn.Conv2d(in_channels, 256, kernel_size=4,padding=1)]      # Fix padding to match Caffe version (pad=1).
-    print('extras layers:',layers)
+        print('input channels:', in_channels)
+        layers += [nn.Conv2d(in_channels, 256, kernel_size=4, padding=1)]  # Fix padding to match Caffe version (pad=1).
+    print('extras layers:', layers)
     return layers
 
-def add_efficientnet_extras(cfg, i = 272, batch_norm=False):
+
+def add_efficientnet_extras(cfg, i=272, batch_norm=False):
     # Extra layers added to EfficientNet for feature scaling
     layers = []
     in_channels = i
@@ -188,19 +192,20 @@ def add_efficientnet_extras(cfg, i = 272, batch_norm=False):
         if in_channels != 'S':
             if v == 'S':
                 layers += [nn.Conv2d(in_channels, cfg[k + 1],
-                           kernel_size=(1, 3)[flag], stride=2, padding=1)]
+                                     kernel_size=(1, 3)[flag], stride=2, padding=1)]
             else:
                 layers += [nn.Conv2d(in_channels, v, kernel_size=(1, 3)[flag])]
             flag = not flag
         in_channels = v
-    print('extras layers:',layers)
+    print('extras layers:', layers)
     return layers
+
 
 def multibox(vgg, extra_layers, cfg, num_classes):
     loc_layers = []
     conf_layers = []
-    vgg_source = [21, -2]   #Conv4_3  Conv7
-    print('VGG16 output size:',len(vgg))
+    vgg_source = [21, -2]  # Conv4_3  Conv7
+    print('VGG16 output size:', len(vgg))
     print('extra layer size:', len(extra_layers))
     for i, layer in enumerate(extra_layers):
         print('extra layer {} : {}'.format(i, layer))
@@ -208,7 +213,7 @@ def multibox(vgg, extra_layers, cfg, num_classes):
         loc_layers += [nn.Conv2d(vgg[v].out_channels,
                                  cfg[k] * 4, kernel_size=3, padding=1)]
         conf_layers += [nn.Conv2d(vgg[v].out_channels,
-                        cfg[k] * num_classes, kernel_size=3, padding=1)]
+                                  cfg[k] * num_classes, kernel_size=3, padding=1)]
     for k, v in enumerate(extra_layers[1::2], 2):
         loc_layers += [nn.Conv2d(v.out_channels, cfg[k]
                                  * 4, kernel_size=3, padding=1)]
@@ -216,11 +221,12 @@ def multibox(vgg, extra_layers, cfg, num_classes):
                                   * num_classes, kernel_size=3, padding=1)]
     return vgg, extra_layers, (loc_layers, conf_layers)
 
+
 def efficientnet_multibox(efficientnet, extra_layers, cfg, num_classes):
     loc_layers = []
     conf_layers = []
-    efficientnet_source = [9, 13, -1]   #P3-p7
-    print('EfficientNet output size:',len(efficientnet_source))
+    efficientnet_source = [9, 13, -1]  # P3-p7
+    print('EfficientNet output size:', len(efficientnet_source))
     print('extra layer size:', len(extra_layers))
     # print('efficientnet',efficientnet[9])
     for i, layer in enumerate(extra_layers):
@@ -229,13 +235,14 @@ def efficientnet_multibox(efficientnet, extra_layers, cfg, num_classes):
         loc_layers += [nn.Conv2d(efficientnet[v]._project_conv.weight.size()[0],
                                  cfg[k] * 4, kernel_size=3, padding=1)]
         conf_layers += [nn.Conv2d(efficientnet[v]._project_conv.weight.size()[0],
-                        cfg[k] * num_classes, kernel_size=3, padding=1)]
+                                  cfg[k] * num_classes, kernel_size=3, padding=1)]
     for k, v in enumerate(extra_layers[1::2], 2):
         loc_layers += [nn.Conv2d(v.out_channels, cfg[k]
                                  * 4, kernel_size=3, padding=1)]
         conf_layers += [nn.Conv2d(v.out_channels, cfg[k]
                                   * num_classes, kernel_size=3, padding=1)]
     return efficientnet, extra_layers, (loc_layers, conf_layers)
+
 
 base = {
     '300': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'C', 512, 512, 512, 'M',
@@ -255,11 +262,11 @@ efficientnet_mbox = [4, 6, 6, 6, 4, 4]
 efficientnet_axtras = [128, 'S', 256, 128, 256, 128, 256]
 
 
-def build_ssd(phase, size=300, num_classes=21):
+def build_ssd(phase, backbone='VGG16', size=300, num_classes=21):
     if phase != "test" and phase != "train":
         print("ERROR: Phase: " + phase + " not recognized")
         return
-    if size not in [300, 512] :
+    if size not in [300, 512]:
         print("ERROR: You specified size " + repr(size) + ". However, " +
               "currently only SSD300 and SSD512 is supported!")
         return
@@ -269,16 +276,17 @@ def build_ssd(phase, size=300, num_classes=21):
     print('Begin to build SSD-VGG...\n')
     return SSD(phase, size, base_, extras_, head_, num_classes)
 
+
 def build_ssd_efficientnet(phase, size=300, num_classes=21):
     if phase != "test" and phase != "train":
         print("ERROR: Phase: " + phase + " not recognized")
         return
-    if size not in [300, 512] :
+    if size not in [300, 512]:
         print("ERROR: You specified size " + repr(size) + ". However, " +
               "currently only SSD300 and SSD512 is supported!")
         return
     base_, extras_, head_ = efficientnet_multibox(efficientnet_base(),
-                                     add_efficientnet_extras(efficientnet_axtras),
-                                     efficientnet_mbox, num_classes)
+                                                  add_efficientnet_extras(efficientnet_axtras),
+                                                  efficientnet_mbox, num_classes)
     print('Begin to build SSD-EfficientNet...')
     return SSD(phase, size, base_, extras_, head_, num_classes)

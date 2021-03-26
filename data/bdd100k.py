@@ -7,7 +7,7 @@ writen by Men Guangwen
 2021.2.7
 
 """
-from .config import HOME
+# from .config import HOME
 import os.path as osp
 import sys
 import torch
@@ -34,7 +34,7 @@ BDD_CLASSES = (  # always index 0
     'truck')
 
 # note: if you used our download scripts, this should be right
-BDD_ROOT = osp.join(HOME, "BDD100K")
+# BDD_ROOT = osp.join(HOME, "BDD100K")
 
 
 class BDD100KDetection(data.Dataset):
