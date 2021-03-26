@@ -15,6 +15,7 @@ import numpy as np
 import argparse
 import math
 import random
+from utils.utily import *
 
 
 def str2bool(v):
@@ -85,6 +86,7 @@ def train():
     model_config = None
     datasets_config = None
     backbone = None
+    cur_lr = args.lr
 
     if args.dataset == 'COCO':
         if args.dataset_root == VOC_ROOT:
@@ -100,7 +102,7 @@ def train():
     elif args.dataset == 'VOC':
         if args.dataset_root == VOC_ROOT:
             parser.error('Must specify dataset if specifying dataset_root')
-        cfg = voc
+        # cfg = voc
         dataset = VOCDetection(root=args.dataset_root,
                                transform=SSDAugmentation(args.input,
                                                          MEANS))
@@ -116,7 +118,7 @@ def train():
     else:
         print(args.dataset, 'Not define,Return')
         return
-    ssd_net = build_ssd('train', 'VGG16', model_config['net_size'], datasets_config['num_classes'], )
+    ssd_net = build_ssd('train', 'SSD512', 'VGG16', model_config['net_size'], datasets_config['num_classes'])
     net = ssd_net
     # for block in net.base.parameters():
     #     block.requires_grad = False
@@ -136,12 +138,22 @@ def train():
         ssd_net.loc.apply(weights_init)
         ssd_net.conf.apply(weights_init)
     else:
-        os.path.exists('path')
-        ssd_net.load_weights(args.resume)
+        path = args.save_folder + '/{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset,
+                                                               str(args.start_epoch).zfill(10))
+        if os.path.exists(path):
+            print('Initializing weights with {}'.format(str(path)))
+            ssd_net.load_weights(path)
+        else:
+            vgg_weights = torch.load(r'weights/vgg16_reducedfc.pth')
+            ssd_net.base.load_state_dict(vgg_weights)
+            ssd_net.extras.apply(weights_init)
+            ssd_net.loc.apply(weights_init)
+            ssd_net.conf.apply(weights_init)
 
     optimizer = optim.AdamW(net.parameters(), lr=args.lr)
     criterion = MultiBoxLoss(datasets_config['num_classes'], 0.5, True, 0, True, 3, 0.5,
-                             False, args.cuda)
+                             False, args.cuda,
+                             args.modelname)
 
     net.train()
     iteration = 1
@@ -158,11 +170,11 @@ def train():
     for epoch in range(args.start_epoch, args.total_epoch):
         print('\n' + '-' * 70 + 'Epoch: {}'.format(epoch) + '-' * 70 + '\n')
         if epoch <= 5:
-            warmup_learning_rate(optimizer, epoch)
+            warmup_learning_rate(args.lr, optimizer, epoch)
         else:
             if epoch in datasets_config['lr_steps']:
                 step_index += 1
-                adjust_learning_rate(optimizer, args.gamma, step_index)
+                adjust_learning_rate(args.lr, optimizer, args.gamma, step_index)
         for param in optimizer.param_groups:
             if 'lr' in param.keys():
                 cur_lr = param['lr']
@@ -193,41 +205,11 @@ def train():
             if iteration != 0 and iteration % 1000 == 0:
                 print('Saving state, iter:', iteration)
                 torch.save(ssd_net.state_dict(),
-                           'weights/{}_{}_iter_{}.pth'.format(args.modelname, args.dataset, str(iteration).zfill(10)))
+                           args.save_folder + '{}_{}_iter_{}.pth'.format(args.modelname, args.dataset,
+                                                                         str(iteration).zfill(10)))
             iteration += 1
         torch.save(ssd_net.state_dict(),
                    args.save_folder + '/{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset, str(epoch).zfill(10)))
-
-
-def adjust_learning_rate(optimizer, gamma, step):
-    """Sets the learning rate to the initial LR decayed by 10 at every
-        specified step
-    # Adapted from PyTorch Imagenet example:
-    # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
-    lr = args.lr * (gamma ** (step - 1))
-    print('Now we change lr ...')
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
-def warmup_learning_rate(optimizer, epoch):
-    lr_ini = 0.0001
-    print('lr warmup...')
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr_ini + (args.lr - lr_ini) * epoch / 5
-        # d =  param_group['lr']
-        # print()
-
-
-def xavier(param):
-    init.xavier_uniform_(param)
-
-
-def weights_init(m):
-    if isinstance(m, nn.Conv2d):
-        xavier(m.weight.data)
-        m.bias.data.zero_()
 
 
 if __name__ == '__main__':

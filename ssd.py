@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from layers import *
-from data import voc, coco
+from data.config import cfg
 import os
 from efficientnet_pytorch import EfficientNet
 
@@ -26,11 +26,11 @@ class SSD(nn.Module):
         head: "multibox head" consists of loc and conf conv layers
     """
 
-    def __init__(self, phase, size, base, extras, head, num_classes):
+    def __init__(self, phase, size, base, extras, head, num_classes, modelname):
         super(SSD, self).__init__()
         self.phase = phase
         self.num_classes = num_classes
-        self.cfg = voc['SSD{}'.format(size)]
+        self.cfg = cfg[modelname]
         self.priorbox = PriorBox(self.cfg)
         with torch.no_grad():
             self.priors = Variable(self.priorbox.forward())
@@ -47,7 +47,7 @@ class SSD(nn.Module):
 
         if phase == 'test':
             self.softmax = nn.Softmax(dim=-1)
-            self.detect = Detect(num_classes, size, 0, 200, 0.01, 0.45)
+            self.detect = Detect(num_classes, size, 0, 200, 0.01, 0.45,modelname)
 
     def forward(self, x):
         """Applies network layers and ops on input image(s) x.
@@ -262,7 +262,7 @@ efficientnet_mbox = [4, 6, 6, 6, 4, 4]
 efficientnet_axtras = [128, 'S', 256, 128, 256, 128, 256]
 
 
-def build_ssd(phase, backbone='VGG16', size=300, num_classes=21):
+def build_ssd(phase, modelname='SSD512', backbone='VGG16', size=300, num_classes=21):
     if phase != "test" and phase != "train":
         print("ERROR: Phase: " + phase + " not recognized")
         return
@@ -274,7 +274,7 @@ def build_ssd(phase, backbone='VGG16', size=300, num_classes=21):
                                      add_extras(extras[str(size)], 1024),
                                      mbox[str(size)], num_classes)
     print('Begin to build SSD-VGG...\n')
-    return SSD(phase, size, base_, extras_, head_, num_classes)
+    return SSD(phase, size, base_, extras_, head_, num_classes, modelname)
 
 
 def build_ssd_efficientnet(phase, size=300, num_classes=21):

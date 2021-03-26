@@ -35,7 +35,7 @@ from ssd import build_ssd
 # d:\datasets\BDD100K\bdd100k\images\100k\train\0001542f-ec815219.jpg
 # d:\datasets\BDD100K\bdd100k\images\100k\train\0004974f-05e1c285.jpg
 image_path = r'd:\datasets\BDD100K\bdd100k\images\100k\train\0000f77c-6257be58.jpg'
-weight_path = 'weights/SSD512_BDD100K_0000001000.pth'
+weight_path = 'weights/SSD512_BDD100K_0000002000.pth'
 model_input = 512
 
 net = build_ssd('test', 'VGG16',model_input, 11)  # initialize SSD
