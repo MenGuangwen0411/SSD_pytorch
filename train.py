@@ -44,6 +44,9 @@ parser.add_argument('--modelname', default='SSD512', choices=['SSD300', 'SSD512'
                     type=str)
 parser.add_argument('--backbone', default='VGG16', type=str,
                     choices=['VGG16', 'ResNet50', 'EfficientNet'])
+parser.add_argument('--clossname', default='ce', type=str,
+                    choices=['ce', 'wloss', 'bce'],
+                    help='class loss type')
 parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
