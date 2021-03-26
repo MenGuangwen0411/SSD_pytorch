@@ -44,7 +44,7 @@ parser.add_argument('--modelname', default='SSD512', choices=['SSD300', 'SSD512'
                     type=str)
 parser.add_argument('--backbone', default='VGG16', type=str,
                     choices=['VGG16', 'ResNet50', 'EfficientNet'])
-parser.add_argument('--clossname', default='ce', type=str,
+parser.add_argument('--losscname', default='ce', type=str,
                     choices=['ce', 'wloss', 'bce'],
                     help='class loss type')
 parser.add_argument('--batch_size', default=32, type=int,
@@ -208,11 +208,13 @@ def train():
             if iteration != 0 and iteration % 1000 == 0:
                 print('Saving state, iter:', iteration)
                 torch.save(ssd_net.state_dict(),
-                           args.save_folder + '{}_{}_iter_{}.pth'.format(args.modelname, args.dataset,
-                                                                         str(iteration).zfill(10)))
+                           args.save_folder + '{}_{}_{}_iter_{}.pth'.format(args.modelname, args.dataset,
+                                                                            args.losscname,
+                                                                            str(iteration).zfill(10)))
             iteration += 1
         torch.save(ssd_net.state_dict(),
-                   args.save_folder + '/{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset, str(epoch).zfill(10)))
+                   args.save_folder + '/{}_{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset, args.losscname,
+                                                                      str(epoch).zfill(5)))
 
 
 if __name__ == '__main__':

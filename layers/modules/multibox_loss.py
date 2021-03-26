@@ -6,6 +6,7 @@ from torch.autograd import Variable
 # from data import coco as cfg
 from data.config import cfg
 from ..box_utils import match, log_sum_exp
+from .pre_define_wloss import Pre_Define_Wloss_SSD
 
 
 class MultiBoxLoss(nn.Module):
@@ -110,7 +111,7 @@ class MultiBoxLoss(nn.Module):
         conf_p = conf_data[(pos_idx + neg_idx).gt(0)].view(-1, self.num_classes)
         targets_weighted = conf_t[(pos + neg).gt(0)]
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
-
+        # loss_c_wloss = Pre_Define_Wloss_SSD().forward(conf_p, targets_weighted)
         # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
 
         N = num_pos.data.sum()
