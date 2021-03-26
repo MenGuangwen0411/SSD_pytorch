@@ -34,7 +34,7 @@ class MultiBoxLoss(nn.Module):
 
     def __init__(self, num_classes, overlap_thresh, prior_for_matching,
                  bkg_label, neg_mining, neg_pos, neg_overlap, encode_target,
-                 use_gpu=True, modelname='SSD512'):
+                 use_gpu=True, modelname='SSD512', losscname='ce'):
         super(MultiBoxLoss, self).__init__()
         self.use_gpu = use_gpu
         self.num_classes = num_classes
@@ -47,6 +47,7 @@ class MultiBoxLoss(nn.Module):
         self.neg_overlap = neg_overlap
         # self.variance = cfg['variance']
         self.variance = cfg[modelname]['variance']
+        self.losscname = losscname
 
     def forward(self, predictions, targets):
         """Multibox Loss
@@ -110,7 +111,11 @@ class MultiBoxLoss(nn.Module):
         neg_idx = neg.unsqueeze(2).expand_as(conf_data)
         conf_p = conf_data[(pos_idx + neg_idx).gt(0)].view(-1, self.num_classes)
         targets_weighted = conf_t[(pos + neg).gt(0)]
-        loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
+        if self.losscname == 'ce':
+            loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
+        elif self.losscname == 'wloss':
+            loss_c = Pre_Define_Wloss_SSD().forward(conf_p, targets_weighted)
+
         # loss_c_wloss = Pre_Define_Wloss_SSD().forward(conf_p, targets_weighted)
         # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
 

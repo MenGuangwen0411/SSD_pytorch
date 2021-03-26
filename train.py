@@ -45,7 +45,7 @@ parser.add_argument('--modelname', default='SSD512', choices=['SSD300', 'SSD512'
 parser.add_argument('--backbone', default='VGG16', type=str,
                     choices=['VGG16', 'ResNet50', 'EfficientNet'])
 parser.add_argument('--losscname', default='ce', type=str,
-                    choices=['ce', 'wloss', 'bce'],
+                    choices=['ce', 'wloss'],
                     help='class loss type')
 parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
@@ -53,7 +53,7 @@ parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from')
 parser.add_argument('--start_epoch', default=0, type=int,
                     help='Resume training at this epoch')
-parser.add_argument('--total_epoch', default=300, type=int,
+parser.add_argument('--end_epoch', default=300, type=int,
                     help='number of epochs to train')
 parser.add_argument('--num_workers', default=6, type=int,
                     help='Number of workers used in loading data')
@@ -156,7 +156,7 @@ def train():
     optimizer = optim.AdamW(net.parameters(), lr=args.lr)
     criterion = MultiBoxLoss(datasets_config['num_classes'], 0.5, True, 0, True, 3, 0.5,
                              False, args.cuda,
-                             args.modelname)
+                             args.modelname, args.losscname)
 
     net.train()
     iteration = 1
@@ -170,7 +170,7 @@ def train():
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True)
 
-    for epoch in range(args.start_epoch, args.total_epoch):
+    for epoch in range(args.start_epoch, args.end_epoch + 1):
         print('\n' + '-' * 70 + 'Epoch: {}'.format(epoch) + '-' * 70 + '\n')
         if epoch <= 5:
             warmup_learning_rate(args.lr, optimizer, epoch)
@@ -213,8 +213,8 @@ def train():
                                                                             str(iteration).zfill(10)))
             iteration += 1
         torch.save(ssd_net.state_dict(),
-                   args.save_folder + '/{}_{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset, args.losscname,
-                                                                      str(epoch).zfill(5)))
+                   args.save_folder + '{}_{}_{}_epoch_{}.pth'.format(args.modelname, args.dataset, args.losscname,
+                                                                     str(epoch).zfill(5)))
 
 
 if __name__ == '__main__':
